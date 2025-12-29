@@ -3,7 +3,7 @@
 # ========================
 # BASIC CONFIG
 # ========================
-BASE_URL = "https://opensource-demo.orangehrmlive.com"
+BASE_URL = "https://www.google.com/maps"
 USERNAME = "Admin"
 PASSWORD = "admin123"
 
