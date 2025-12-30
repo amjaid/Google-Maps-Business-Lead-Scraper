@@ -1,7 +1,8 @@
 import asyncio
 import re
 import pandas as pd
-from undetected_playwright.async_api import async_playwright, Playwright
+from playwright.async_api import async_playwright, Playwright
+import undetected_playwright
 
 # Assuming config.py is in the same directory
 from config import BASE_URL, SEARCH_QUERIES, SELECTORS, OUTPUT_DIR, MAX_SCROLL_ATTEMPTS, MAX_LEADS_PER_QUERY, SCROLL_PAUSE
