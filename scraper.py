@@ -2,7 +2,7 @@ import time
 import pandas as pd
 import config
 import asyncio
-from playwright.async_api import async_playwright, expect
+from playwright.async_api import async_playwright
 import random
 
 data = []
@@ -23,57 +23,130 @@ def add_item(name, category, address, phone, url, rating, reviews, location):
     })
 
 
-def safe_text(locator):
+async def safe_text(locator):
     try:
-        return locator.inner_text().strip()
+        text = await locator.inner_text()
+        return text.strip() if text else "N/A"
     except:
         return "N/A"
-    
-
-# # ------------------------
-# # Scraping Logic
-# # ------------------------
-# def scrape_current_page(page):
-#     cards = page.locator(config.EMPLOYEE_CARD)
-#     expect(cards.first).to_be_visible()
-
-#     cards = page.locator(config.EMPLOYEE_CARD)
-#     count = cards.count()
-#     print(f"Found {count} employee cards")
-
-#     for i in range(count):
-#         card = cards.nth(i)
-
-#         add_item(
-#             safe_text(card.locator('div:nth-child(2) div')),
-#             safe_text(card.locator('div:nth-child(3) div')),
-#             safe_text(card.locator('div:nth-child(4) div')),
-#             safe_text(card.locator('div:nth-child(5) div')),
-#             safe_text(card.locator('div:nth-child(6) div')),
-#             safe_text(card.locator('div:nth-child(7) div')),
-#         )
 
 
-# def click_next_page(page):
-#     next_icon = page.locator(config.NEXT_BUTTON_ICON)
+async def extract_and_add_business_data(card):
+    """Extract data from a business card and add to data list"""
+    try:
+        # Get the UaQhfb container where most data is stored
+        container = card.locator(".UaQhfb.fontBodyMedium")
+        
+        # 1. Business Name
+        name_element = container.locator(".qBF1Pd.fontHeadlineSmall")
+        name = await safe_text(name_element)
+        
+        if name == "N/A":
+            print("Skipping card - no name found")
+            return False
+        
+        # 2. Category (usually first span in second W4Efsd div)
+        category = "N/A"
+        category_container = container.locator(".W4Efsd:nth-child(2)")
+        category_spans = category_container.locator("span")
+        
+        if await category_spans.count() > 0:
+            # First span often contains category
+            category = await safe_text(category_spans.first)
+            
+            # Clean up if it contains separators
+            if "·" in category or "RM" in category or len(category) > 50:
+                # Look for actual category
+                for i in range(await category_spans.count()):
+                    span_text = await safe_text(category_spans.nth(i))
+                    if span_text and len(span_text) < 30 and "·" not in span_text and "RM" not in span_text:
+                        category = span_text
+                        break
+        
+        # 3. Address (look for longest text)
+        address = "N/A"
+        address_spans = container.locator(".W4Efsd:nth-child(2) span")
+        
+        for i in range(await address_spans.count()):
+            span_text = await safe_text(address_spans.nth(i))
+            # Addresses are usually longer
+            if span_text and len(span_text) > 30:
+                address = span_text
+                break
+        
+        # 4. URL
+        url = "N/A"
+        link_element = card.locator("a.hfpxzc")
+        if await link_element.count() > 0:
+            url = await link_element.get_attribute("href")
+        
+        # 5. Rating
+        rating_element = container.locator(".MW4etd")
+        rating = await safe_text(rating_element)
+        
+        # 6. Reviews
+        reviews_element = container.locator(".UY7F9")
+        reviews_raw = await safe_text(reviews_element)
+        reviews = reviews_raw.replace("(", "").replace(")", "")
+        
+        # 7. Phone (usually not available in main card)
+        phone = "N/A"
+        
+        # 8. Location (extract from address or use default)
+        location = config.DEFAULT_LOCATION if hasattr(config, 'DEFAULT_LOCATION') else "Kuala Lumpur"
+        if "Kuala Lumpur" in address or "KL" in address:
+            location = "Kuala Lumpur"
+        
+        # Add to data list
+        add_item(
+            name=name,
+            category=category,
+            address=address,
+            phone=phone,
+            url=url,
+            rating=rating,
+            reviews=reviews,
+            location=location
+        )
+        
+        print(f"✓ Added: {name}")
+        return True
+        
+    except Exception as e:
+        print(f"✗ Error extracting data: {e}")
+        return False
 
-#     if next_icon.count() == 0:
-#         return False
 
-#     button = next_icon.locator("..")
-
-#     disabled = (
-#         button.get_attribute("disabled") is not None or
-#         "disabled" in (button.get_attribute("class") or "")
-#     )
-
-#     if disabled:
-#         return False
-
-#     button.click()
-#     page.wait_for_load_state("networkidle")
-#     time.sleep(1)
-#     return True
+async def scrape_current_businesses(page):
+    """Scrape all currently loaded business cards"""
+    try:
+        business_cards = page.locator("div[role='article']")
+        current_count = await business_cards.count()
+        
+        print(f"Found {current_count} business cards, scraping...")
+        
+        # Get indices of already scraped cards
+        already_scraped = len(data)
+        
+        # Only scrape new cards (from already_scraped to end)
+        new_cards_scraped = 0
+        for i in range(already_scraped, current_count):
+            card = business_cards.nth(i)
+            if await extract_and_add_business_data(card):
+                new_cards_scraped += 1
+            
+            # Small delay to avoid detection
+            if i % 5 == 0:
+                await page.wait_for_timeout(random.randint(200, 500))
+        
+        print(f"Scraped {new_cards_scraped} new businesses")
+        print(f"Total scraped: {len(data)}")
+        
+        return new_cards_scraped
+        
+    except Exception as e:
+        print(f"Error scraping businesses: {e}")
+        return 0  
 
 
 # ------------------------
@@ -85,41 +158,36 @@ async def run():
     while retries < config.MAX_RETRIES:
         try:
             async with async_playwright() as p:
-                browser = await p.chromium.launch(
-                    headless=False, # Headful is less detectable
+                context = await p.chromium.launch_persistent_context(
+                    user_data_dir=config.PROFILE_DIR,
+                    headless=False,
                     args=[
-                        '--disable-blink-features=AutomationControlled',
-                        '--disable-infobars',
-                        '--window-size=1920,1080', # Set a common resolution
-                        '--enable-webgl', # Enable graphics for fingerprinting
-                    ]
+                        "--disable-blink-features=AutomationControlled",
+                        "--start-maximized",
+                        "--no-sandbox",
+                        "--disable-dev-shm-usage",
+                    ],
+                    viewport=None, 
+                    locale="en-MY",
+                    timezone_id="Asia/Kuala_Lumpur",
                 )
 
-                # 2. Realistic Browser Context Configuration
-                context = await browser.new_context(
-                    # Use a modern, realistic user agent
-                    user_agent='Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/132.0.0.0 Safari/537.36',
-                    viewport={'width': 1920, 'height': 1080},
-                    locale='en-US',
-                    timezone_id='America/New_York',
-                )
+                # Use existing tab or create one
+                if context.pages:
+                    page = context.pages[0]
+                else:
+                    page = await context.new_page()
 
-                page = await context.new_page()
-                if page is None:
-                    raise Exception("Failed to create new page - context.new_page() returned None")
-                # page.set_default_timeout(3000)
+                # --------------------------------
+                # SESSION WARM-UP 
+                # --------------------------------
+                await page.goto(config.BASE_URL, timeout=60000)
 
-                # Go to site
-                await page.goto(config.BASE_URL)
-                
-                # Add random delays to mimic reading/thinking
-                await page.wait_for_timeout(random.randint(2000, 5000))
-                
-                # Simulate human-like mouse movement
-                await page.mouse.move(
-                    random.randint(100, 300),
-                    random.randint(100, 300)
-                )
+                await page.wait_for_timeout(random.randint(8000, 12000))
+                await page.mouse.move(400, 400)
+                await page.wait_for_timeout(2000)
+                await page.mouse.wheel(0, 200)
+                await page.wait_for_timeout(random.randint(3000, 6000))
 
                 await page.type('#searchboxinput', config.SEARCH, delay=random.uniform(50, 150))
                 await page.locator("[aria-label=\"Search\"]").press("Enter")
@@ -144,62 +212,69 @@ async def run():
                 # print(f"✅ Saved UaQhfb element HTML ({len(element_html)} chars)")
 
 
-                while(len(data) < config.TARGET):
-                    await page.mouse.move(
-                        random.randint(100, 300),
-                        random.randint(100, 300)
-                    )
-                    locator = page.get_by_role('article')
-                    await page.mouse.wheel(0, 500)
-                    await page.wait_for_timeout(random.randint(5000, 10000))
+                while len(data) < config.TARGET:
+                    # Scrape current businesses first
+                    await scrape_current_businesses(page)
+                    
+                    # If we've reached target, break
+                    if len(data) >= config.TARGET:
+                        print(f"✅ Reached target of {config.TARGET} businesses")
+                        break
+                    
+                    # Scroll to load more
+                    await page.mouse.wheel(0, random.randint(300, 800))
+                    
+                    # Random human-like delays
+                    await page.wait_for_timeout(random.randint(1000, 3000))
+                    
+                    # Sometimes move mouse
+                    if random.random() > 0.7:  # 30% chance
+                        await page.mouse.move(
+                            random.randint(100, 500),
+                            random.randint(100, 500)
+                        )
+                    
+                    # Check if we're stuck (no new cards loading)
+                    business_cards = page.locator("div[role='article']")
+                    current_count = await business_cards.count()
+                    
+                    # If no new cards after 3 scrolls, break
+                    if hasattr(page, '_last_card_count'):
+                        if current_count == page._last_card_count:
+                            page._stuck_count = getattr(page, '_stuck_count', 0) + 1
+                            if page._stuck_count > 3:
+                                print("No new businesses loading. Stopping.")
+                                break
+                        else:
+                            page._stuck_count = 0
+                    
+                    page._last_card_count = current_count  
+                
+                # Save data
+                df = pd.DataFrame(data)
+                df.to_csv(config.CSV_OUTPUT, index=False)
+                df.to_excel(config.EXCEL_OUTPUT, index=False)
+
+                print(f"\nScraped {len(data)} records successfully")
+                return
+                    
+                await page.wait_for_timeout(random.randint(5000, 10000))
 
 
                 await page.screenshot(path=config.SCREENSHOT_ON_ERROR, full_page=True)
                 break
 
         except Exception as e:
+            retries += 1
+            await asyncio.sleep(10)
+
             print("Fatal error:", e)
             try:
                 await page.screenshot(path=config.SCREENSHOT_ON_ERROR, full_page=True)
             except:
                 pass
             raise 
-                
 
 
-#                 # Pagination loop
-#                 page_num = 1
-#                 while True:
-#                     print(f"\nScraping page {page_num}")
-#                     scrape_current_page(page)
-
-#                     if not click_next_page(page):
-#                         break
-
-#                     page_num += 1
-
-#                 # Save data
-#                 df = pd.DataFrame(data)
-#                 df.to_csv(config.CSV_OUTPUT, index=False)
-#                 df.to_excel(config.EXCEL_OUTPUT, index=False)
-
-#                 print(f"\nScraped {len(data)} records successfully")
-#                 browser.close()
-#                 return
-
-#         except TimeoutError as e:
-#             retries += 1
-#             print(f"[Retry {retries}] Timeout error: {e}")
-#             time.sleep(config.RETRY_DELAY)
-
-#         except Exception as e:
-#             print("Fatal error:", e)
-#             try:
-#                 page.screenshot(path=config.SCREENSHOT_ON_ERROR, full_page=True)
-#             except:
-#                 pass
-#             raise
-
-# 
 if __name__ == "__main__":
     asyncio.run(run())

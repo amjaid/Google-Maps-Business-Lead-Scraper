@@ -9,7 +9,8 @@ BASE_URL = "https://www.google.com/maps"
 
 HEADLESS = False
 SLOW_MO = 50  # ms delay between actions (human-like)
-TARGET = 1000
+TARGET = 100
+PROFILE_DIR = "chrome_profile_google_maps"
 # ========================
 # TIMEOUTS & RETRIES
 # ========================
