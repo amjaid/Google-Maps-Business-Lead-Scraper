@@ -29,51 +29,6 @@ def safe_text(locator):
     except:
         return "N/A"
     
-async def process_all_business_cards(page):
-    """Process and extract data from all business cards on current page"""
-    # Wait for business cards to load
-    await page.wait_for_selector("div[role='article']", timeout=30000)
-    
-    # Get all business cards
-    business_cards = page.locator("div[role='article']")
-    card_count = await business_cards.count()
-    
-    print(f"\nFound {card_count} business cards on this page")
-    
-    successful = 0
-    failed = 0
-    
-    for i in range(card_count):
-        card = business_cards.nth(i)
-        
-        # Extract and add data
-        if await extract_and_add_business_data_improved(card):
-            successful += 1
-        else:
-            failed += 1
-        
-        # Optional: small delay to avoid overwhelming
-        if i % 5 == 0:
-            await asyncio.sleep(0.5)
-    
-    print(f"\nPage Summary: {successful} successful, {failed} failed")
-    return successful
-
-
-# Usage example in your main scraping function:
-async def scrape_google_maps(page):
-    """Main scraping function"""
-    print("Starting Google Maps scraping...")
-    
-    # Process first page
-    successful = await process_all_business_cards(page)
-    
-    # Optional: Handle pagination
-    # ... add pagination logic here ...
-    
-    print(f"\n✅ Total businesses added to data list: {len(data)}")
-    return len(data)
-
 
 # # ------------------------
 # # Scraping Logic
@@ -177,20 +132,26 @@ async def run():
                 await page.wait_for_selector("div[role='article']", timeout=config.PAGE_TIMEOUT)
                 await page.wait_for_timeout(random.randint(5000, 10000))
 
-                locator = page.get_by_role('article')
+                
 
-                # Save the UaQhfb fontBodyMedium element HTML
-                element = page.locator(".UaQhfb.fontBodyMedium").first
-                element_html = await element.inner_html()
+                # # Save the UaQhfb fontBodyMedium element HTML
+                # element = page.locator(".UaQhfb.fontBodyMedium").first
+                # element_html = await element.inner_html()
 
-                with open("UaQhfb_element.html", "w", encoding="utf-8") as f:
-                    f.write(element_html)
+                # with open("UaQhfb_element.html", "w", encoding="utf-8") as f:
+                #     f.write(element_html)
 
-                print(f"✅ Saved UaQhfb element HTML ({len(element_html)} chars)")
+                # print(f"✅ Saved UaQhfb element HTML ({len(element_html)} chars)")
 
-                # for i in range(10):
-                #     await page.mouse.wheel(0, 500)
-                #     await page.wait_for_timeout(random.randint(5000, 10000))
+
+                while(len(data) < config.TARGET):
+                    await page.mouse.move(
+                        random.randint(100, 300),
+                        random.randint(100, 300)
+                    )
+                    locator = page.get_by_role('article')
+                    await page.mouse.wheel(0, 500)
+                    await page.wait_for_timeout(random.randint(5000, 10000))
 
 
                 await page.screenshot(path=config.SCREENSHOT_ON_ERROR, full_page=True)
