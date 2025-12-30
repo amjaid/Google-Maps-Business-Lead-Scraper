@@ -1,0 +1,46 @@
+import asyncio
+import random
+from playwright.async_api import async_playwright
+
+async def run():
+    async with async_playwright() as p:
+        # 1. Browser Launch Arguments
+        browser = await p.chromium.launch(
+            headless=False, # Headful is less detectable
+            args=[
+                '--disable-blink-features=AutomationControlled',
+                '--disable-infobars',
+                '--window-size=1920,1080', # Set a common resolution
+                '--enable-webgl', # Enable graphics for fingerprinting
+            ]
+        )
+        
+        # 2. Realistic Browser Context Configuration
+        context = await browser.new_context(
+            # Use a modern, realistic user agent
+            user_agent='Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/132.0.0.0 Safari/537.36',
+            viewport={'width': 1920, 'height': 1080},
+            locale='en-US',
+            timezone_id='America/New_York',
+        )
+        
+        page = await context.new_page()
+        
+        # 3. Mimic Human Behavior on the page
+        await page.goto("https://target-site.com")
+        
+        # Add random delays to mimic reading/thinking
+        await page.wait_for_timeout(random.randint(2000, 5000))
+        
+        # Simulate human-like mouse movement
+        await page.mouse.move(
+            random.randint(100, 300),
+            random.randint(100, 300)
+        )
+        
+        # Type with variable delays
+        await page.type('#searchboxinput', 'query', delay=random.uniform(50, 150))
+        
+        await browser.close()
+
+asyncio.run(run())

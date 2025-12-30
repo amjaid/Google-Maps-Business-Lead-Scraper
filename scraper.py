@@ -1,22 +1,25 @@
 import time
 import pandas as pd
-from playwright.async_api import async_playwright, expect, TimeoutError
 import config
 import asyncio
+from playwright.async_api import async_playwright, expect
+import random
 
 data = []
 
 # ------------------------
 # Helpers
 # ------------------------
-def add_item(id, first_name, last_name, job_title, employment_type, department):
+def add_item(name, category, address, phone, url, rating, reviews, location):
     data.append({
-        "ID": id,
-        "First Name": first_name,
-        "Last Name": last_name,
-        "Job Title": job_title,
-        "Employment Type": employment_type,
-        "Department": department
+        "Business name" : name,
+        "Business category" : category,
+        "Full address" : address,
+        "Phone number (if available)" : phone,
+        "Website URL" : url,
+        "Star rating" : rating,
+        "Total number of reviews" : reviews,
+        "Business location" : location
     })
 
 
@@ -25,117 +28,217 @@ def safe_text(locator):
         return locator.inner_text().strip()
     except:
         return "N/A"
+    
+async def process_all_business_cards(page):
+    """Process and extract data from all business cards on current page"""
+    # Wait for business cards to load
+    await page.wait_for_selector("div[role='article']", timeout=30000)
+    
+    # Get all business cards
+    business_cards = page.locator("div[role='article']")
+    card_count = await business_cards.count()
+    
+    print(f"\nFound {card_count} business cards on this page")
+    
+    successful = 0
+    failed = 0
+    
+    for i in range(card_count):
+        card = business_cards.nth(i)
+        
+        # Extract and add data
+        if await extract_and_add_business_data_improved(card):
+            successful += 1
+        else:
+            failed += 1
+        
+        # Optional: small delay to avoid overwhelming
+        if i % 5 == 0:
+            await asyncio.sleep(0.5)
+    
+    print(f"\nPage Summary: {successful} successful, {failed} failed")
+    return successful
 
 
-# ------------------------
-# Scraping Logic
-# ------------------------
-def scrape_current_page(page):
-    cards = page.locator(config.EMPLOYEE_CARD)
-    expect(cards.first).to_be_visible()
-
-    cards = page.locator(config.EMPLOYEE_CARD)
-    count = cards.count()
-    print(f"Found {count} employee cards")
-
-    for i in range(count):
-        card = cards.nth(i)
-
-        add_item(
-            safe_text(card.locator('div:nth-child(2) div')),
-            safe_text(card.locator('div:nth-child(3) div')),
-            safe_text(card.locator('div:nth-child(4) div')),
-            safe_text(card.locator('div:nth-child(5) div')),
-            safe_text(card.locator('div:nth-child(6) div')),
-            safe_text(card.locator('div:nth-child(7) div')),
-        )
+# Usage example in your main scraping function:
+async def scrape_google_maps(page):
+    """Main scraping function"""
+    print("Starting Google Maps scraping...")
+    
+    # Process first page
+    successful = await process_all_business_cards(page)
+    
+    # Optional: Handle pagination
+    # ... add pagination logic here ...
+    
+    print(f"\n✅ Total businesses added to data list: {len(data)}")
+    return len(data)
 
 
-def click_next_page(page):
-    next_icon = page.locator(config.NEXT_BUTTON_ICON)
+# # ------------------------
+# # Scraping Logic
+# # ------------------------
+# def scrape_current_page(page):
+#     cards = page.locator(config.EMPLOYEE_CARD)
+#     expect(cards.first).to_be_visible()
 
-    if next_icon.count() == 0:
-        return False
+#     cards = page.locator(config.EMPLOYEE_CARD)
+#     count = cards.count()
+#     print(f"Found {count} employee cards")
 
-    button = next_icon.locator("..")
+#     for i in range(count):
+#         card = cards.nth(i)
 
-    disabled = (
-        button.get_attribute("disabled") is not None or
-        "disabled" in (button.get_attribute("class") or "")
-    )
+#         add_item(
+#             safe_text(card.locator('div:nth-child(2) div')),
+#             safe_text(card.locator('div:nth-child(3) div')),
+#             safe_text(card.locator('div:nth-child(4) div')),
+#             safe_text(card.locator('div:nth-child(5) div')),
+#             safe_text(card.locator('div:nth-child(6) div')),
+#             safe_text(card.locator('div:nth-child(7) div')),
+#         )
 
-    if disabled:
-        return False
 
-    button.click()
-    page.wait_for_load_state("networkidle")
-    time.sleep(1)
-    return True
+# def click_next_page(page):
+#     next_icon = page.locator(config.NEXT_BUTTON_ICON)
+
+#     if next_icon.count() == 0:
+#         return False
+
+#     button = next_icon.locator("..")
+
+#     disabled = (
+#         button.get_attribute("disabled") is not None or
+#         "disabled" in (button.get_attribute("class") or "")
+#     )
+
+#     if disabled:
+#         return False
+
+#     button.click()
+#     page.wait_for_load_state("networkidle")
+#     time.sleep(1)
+#     return True
 
 
 # ------------------------
 # Main Runner
 # ------------------------
-def run():
+async def run():
     retries = 0
 
     while retries < config.MAX_RETRIES:
         try:
-            with sync_playwright() as p:
-                browser = p.chromium.launch(
-                    headless=config.HEADLESS,
-                    slow_mo=config.SLOW_MO
+            async with async_playwright() as p:
+                browser = await p.chromium.launch(
+                    headless=False, # Headful is less detectable
+                    args=[
+                        '--disable-blink-features=AutomationControlled',
+                        '--disable-infobars',
+                        '--window-size=1920,1080', # Set a common resolution
+                        '--enable-webgl', # Enable graphics for fingerprinting
+                    ]
                 )
 
-                page = browser.new_page()
-                page.set_default_timeout(config.PAGE_TIMEOUT)
+                # 2. Realistic Browser Context Configuration
+                context = await browser.new_context(
+                    # Use a modern, realistic user agent
+                    user_agent='Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/132.0.0.0 Safari/537.36',
+                    viewport={'width': 1920, 'height': 1080},
+                    locale='en-US',
+                    timezone_id='America/New_York',
+                )
+
+                page = await context.new_page()
+                if page is None:
+                    raise Exception("Failed to create new page - context.new_page() returned None")
+                # page.set_default_timeout(3000)
 
                 # Go to site
-                page.goto(config.BASE_URL)
+                await page.goto(config.BASE_URL)
+                
+                # Add random delays to mimic reading/thinking
+                await page.wait_for_timeout(random.randint(2000, 5000))
+                
+                # Simulate human-like mouse movement
+                await page.mouse.move(
+                    random.randint(100, 300),
+                    random.randint(100, 300)
+                )
 
-                # Login
-                expect(page.locator(config.USERNAME_INPUT)).to_be_visible()
-                page.fill(config.USERNAME_INPUT, config.USERNAME)
-                page.fill(config.PASSWORD_INPUT, config.PASSWORD)
-                page.click(config.LOGIN_BUTTON)
+                await page.type('#searchboxinput', config.SEARCH, delay=random.uniform(50, 150))
+                await page.locator("[aria-label=\"Search\"]").press("Enter")
 
-                # Navigate to PIM
-                expect(page.locator(config.PIM_MENU)).to_be_visible()
-                page.click(config.PIM_MENU)
+                await page.mouse.move(
+                    random.randint(100, 300),
+                    random.randint(100, 300)
+                )
+                
+                await page.wait_for_selector("div[role='article']", timeout=config.PAGE_TIMEOUT)
+                await page.wait_for_timeout(random.randint(5000, 10000))
 
-                # Pagination loop
-                page_num = 1
-                while True:
-                    print(f"\nScraping page {page_num}")
-                    scrape_current_page(page)
+                locator = page.get_by_role('article')
 
-                    if not click_next_page(page):
-                        break
+                # Save the UaQhfb fontBodyMedium element HTML
+                element = page.locator(".UaQhfb.fontBodyMedium").first
+                element_html = await element.inner_html()
 
-                    page_num += 1
+                with open("UaQhfb_element.html", "w", encoding="utf-8") as f:
+                    f.write(element_html)
 
-                # Save data
-                df = pd.DataFrame(data)
-                df.to_csv(config.CSV_OUTPUT, index=False)
-                df.to_excel(config.EXCEL_OUTPUT, index=False)
+                print(f"✅ Saved UaQhfb element HTML ({len(element_html)} chars)")
 
-                print(f"\nScraped {len(data)} records successfully")
-                browser.close()
-                return
+                # for i in range(10):
+                #     await page.mouse.wheel(0, 500)
+                #     await page.wait_for_timeout(random.randint(5000, 10000))
 
-        except TimeoutError as e:
-            retries += 1
-            print(f"[Retry {retries}] Timeout error: {e}")
-            time.sleep(config.RETRY_DELAY)
+
+                await page.screenshot(path=config.SCREENSHOT_ON_ERROR, full_page=True)
+                break
 
         except Exception as e:
             print("Fatal error:", e)
             try:
-                page.screenshot(path=config.SCREENSHOT_ON_ERROR, full_page=True)
+                await page.screenshot(path=config.SCREENSHOT_ON_ERROR, full_page=True)
             except:
                 pass
-            raise
+            raise 
+                
 
 
+#                 # Pagination loop
+#                 page_num = 1
+#                 while True:
+#                     print(f"\nScraping page {page_num}")
+#                     scrape_current_page(page)
+
+#                     if not click_next_page(page):
+#                         break
+
+#                     page_num += 1
+
+#                 # Save data
+#                 df = pd.DataFrame(data)
+#                 df.to_csv(config.CSV_OUTPUT, index=False)
+#                 df.to_excel(config.EXCEL_OUTPUT, index=False)
+
+#                 print(f"\nScraped {len(data)} records successfully")
+#                 browser.close()
+#                 return
+
+#         except TimeoutError as e:
+#             retries += 1
+#             print(f"[Retry {retries}] Timeout error: {e}")
+#             time.sleep(config.RETRY_DELAY)
+
+#         except Exception as e:
+#             print("Fatal error:", e)
+#             try:
+#                 page.screenshot(path=config.SCREENSHOT_ON_ERROR, full_page=True)
+#             except:
+#                 pass
+#             raise
+
+# 
 if __name__ == "__main__":
-    run()
+    asyncio.run(run())
