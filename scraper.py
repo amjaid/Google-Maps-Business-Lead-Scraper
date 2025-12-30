@@ -256,9 +256,6 @@ async def run():
                 df.to_excel(config.EXCEL_OUTPUT, index=False)
 
                 print(f"\nScraped {len(data)} records successfully")
-                return
-                    
-                await page.wait_for_timeout(random.randint(5000, 10000))
 
 
                 await page.screenshot(path=config.SCREENSHOT_ON_ERROR, full_page=True)
