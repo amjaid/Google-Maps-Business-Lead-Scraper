@@ -116,6 +116,7 @@ Category and address are extracted using semantic rules, not fixed DOM positions
 
 This makes the scraper resilient to Google Maps UI changes.
 
+---
 
 ⚠️ Important Notes
 
@@ -127,12 +128,15 @@ Excessive speed may trigger:
 
 -> Temporary IP throttling
 
+---
 
 ⚠️ Recommended limits:
 
 -> 300–1000 records/day per IP
 
 -> Avoid running multiple instances simultaneously
+
+---
 
 🔒 Session Persistence
 
@@ -150,6 +154,7 @@ This means:
 
 -> Lower chance of repeated bot detection
 
+---
 
 ❗ Legal & Ethical Disclaimer
 
@@ -163,6 +168,7 @@ Local data protection laws
 
 Use responsibly and at your own risk.
 
+---
 
 📈 Possible Improvements
 
@@ -176,6 +182,7 @@ Resume scraping from last saved record
 
 Multi-location scraping
 
+---
 
 🧑‍💻 Author Notes
 
@@ -187,7 +194,7 @@ This scraper is optimized for:
 
 -> Controlled data extraction jobs
 
-
+---
 
 👤 Author Abdullah Mohammad Jaid
 
