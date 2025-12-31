@@ -45,34 +45,35 @@ async def extract_and_add_business_data(card):
             print("Skipping card - no name found")
             return False
         
-        # 2. Category (usually first span in second W4Efsd div)
+        # ---- CATEGORY & ADDRESS (ROBUST) ----
         category = "N/A"
-        category_container = container.locator(".W4Efsd:nth-child(2)")
-        category_spans = category_container.locator("span")
-        
-        if await category_spans.count() > 0:
-            # First span often contains category
-            category = await safe_text(category_spans.first)
-            
-            # Clean up if it contains separators
-            if "·" in category or "RM" in category or len(category) > 50:
-                # Look for actual category
-                for i in range(await category_spans.count()):
-                    span_text = await safe_text(category_spans.nth(i))
-                    if span_text and len(span_text) < 30 and "·" not in span_text and "RM" not in span_text:
-                        category = span_text
-                        break
-        
-        # 3. Address (look for longest text)
         address = "N/A"
-        address_spans = container.locator(".W4Efsd:nth-child(2) span")
-        
-        for i in range(await address_spans.count()):
-            span_text = await safe_text(address_spans.nth(i))
-            # Addresses are usually longer
-            if span_text and len(span_text) > 30:
-                address = span_text
-                break
+
+        info_blocks = container.locator(".W4Efsd span")
+
+        for i in range(await info_blocks.count()):
+            text = await safe_text(info_blocks.nth(i))
+
+            if not text or text in ("·",):
+                continue
+
+            # CATEGORY: short, no digits, no RM, no Open/Closed
+            if (
+                category == "N/A"
+                and len(text) < 30
+                and not any(x in text for x in ["RM", "Open", "Closed", "Opens"])
+                and not any(char.isdigit() for char in text)
+            ):
+                category = text
+                continue
+
+            # ADDRESS: long text with numbers or commas
+            if (
+                address == "N/A"
+                and len(text) > 30
+                and any(char.isdigit() for char in text)
+            ):
+                address = text
         
         # 4. URL
         url = "N/A"
