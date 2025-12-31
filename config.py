@@ -16,4 +16,4 @@ EXCEL_OUTPUT = "business_data.xlsx"
 SCREENSHOT_ON_ERROR = "error_screenshot.png"
 
 # Targets
-TARGET = 5
+TARGET = 15

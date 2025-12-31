@@ -7,11 +7,29 @@ import random
 from datetime import datetime
 
 data = []
+seen_urls = set()  # Track seen URLs to avoid duplicates
 
 # ------------------------
 # Helpers
 # ------------------------
 def add_item(name, category, address, phone, url, rating, reviews, location):
+    """Add item to data list if URL is not already seen"""
+    # Skip if URL is already in our set (or if it's "N/A" and we've seen this name)
+    if url != "N/A" and url in seen_urls:
+        print(f"⚠️  Duplicate URL skipped: {name} ({url})")
+        return False
+    
+    # Also check for duplicate names for businesses without URLs
+    if url == "N/A":
+        # Create a unique identifier from name + address for duplicate checking
+        unique_id = f"{name}|{address}"
+        if unique_id in seen_urls:  # Reusing the set for all unique identifiers
+            print(f"⚠️  Duplicate business skipped: {name} ({address})")
+            return False
+        seen_urls.add(unique_id)
+    else:
+        seen_urls.add(url)
+    
     data.append({
         "Business name": name,
         "Business category": category,
@@ -23,6 +41,7 @@ def add_item(name, category, address, phone, url, rating, reviews, location):
         "Business location": location,
         "Scraped at": datetime.now().strftime("%Y-%m-%d %H:%M:%S")
     })
+    return True
 
 
 async def safe_text(locator, timeout=5000):
@@ -127,8 +146,8 @@ async def extract_and_add_business_data(card, attempt=1):
         elif "Cheras" in address:
             location = "Cheras"
         
-        # Add to data list
-        add_item(
+        # Add to data list with duplicate check
+        added = add_item(
             name=name,
             category=category,
             address=address,
@@ -139,8 +158,9 @@ async def extract_and_add_business_data(card, attempt=1):
             location=location
         )
         
-        print(f"✓ Added: {name}")
-        return True
+        if added:
+            print(f"✓ Added: {name}")
+        return added
         
     except Exception as e:
         if attempt < max_attempts:
@@ -163,7 +183,7 @@ async def scrape_current_businesses(page):
             print("No business cards found")
             return 0
         
-        print(f"Found {current_count} business cards, scraping...")
+        print(f"Found {current_count} business cards, checking for new ones...")
         
         # Get indices of already scraped cards
         already_scraped = len(data)
@@ -192,8 +212,15 @@ async def scrape_current_businesses(page):
                 print(f"Error processing card {i}: {e}")
                 continue
         
-        print(f"Scraped {new_cards_scraped} new businesses")
-        print(f"Total scraped: {len(data)}")
+        # Show summary including duplicates
+        total_processed = current_count - already_scraped
+        duplicates = total_processed - new_cards_scraped
+        if duplicates > 0:
+            print(f"Processed {total_processed} cards: {new_cards_scraped} new, {duplicates} duplicates")
+        else:
+            print(f"Scraped {new_cards_scraped} new businesses")
+        
+        print(f"Unique records so far: {len(data)}")
         
         return new_cards_scraped
         
@@ -290,7 +317,11 @@ async def run():
         try:
             print(f"\n{'='*50}")
             print(f"Starting scraping session (Attempt {retries + 1}/{config.MAX_RETRIES})")
+            print(f"Target: {config.TARGET} unique businesses")
             print(f"{'='*50}")
+            
+            # Clear seen URLs at start of each retry to avoid stale data
+            seen_urls.clear()
             
             async with async_playwright() as p:
                 # Launch browser with persistent context
@@ -343,7 +374,6 @@ async def run():
                     await page.wait_for_timeout(random.randint(2000, 4000))
                 
                 # Main scraping loop
-                last_count = 0
                 stuck_counter = 0
                 max_stuck_attempts = 5
                 
@@ -353,16 +383,16 @@ async def run():
                     
                     # Check if we reached target
                     if len(data) >= config.TARGET:
-                        print(f"\n✅ Reached target of {config.TARGET} businesses!")
+                        print(f"\n✅ Reached target of {config.TARGET} unique businesses!")
                         break
                     
                     # Check if we're stuck
                     if new_scraped == 0:
                         stuck_counter += 1
-                        print(f"No new businesses scraped (stuck: {stuck_counter}/{max_stuck_attempts})")
+                        print(f"No new unique businesses scraped (stuck: {stuck_counter}/{max_stuck_attempts})")
                         
                         if stuck_counter >= max_stuck_attempts:
-                            print("Too many attempts without new businesses. Stopping.")
+                            print("Too many attempts without new unique businesses. Stopping.")
                             break
                         
                         # Try different scroll patterns
@@ -410,7 +440,8 @@ async def run():
                 
                 print(f"\n{'='*50}")
                 print(f"Scraping completed successfully!")
-                print(f"Total records: {len(data)}")
+                print(f"Total unique records: {len(data)}")
+                print(f"Total duplicates skipped: {len(seen_urls) - len(data)}")
                 print(f"Output files: {config.CSV_OUTPUT}, {config.EXCEL_OUTPUT}")
                 print(f"{'='*50}")
                 
@@ -450,7 +481,7 @@ if __name__ == "__main__":
             df = pd.DataFrame(data)
             df.to_csv(config.CSV_OUTPUT, index=False)
             df.to_excel(config.EXCEL_OUTPUT, index=False)
-            print(f"✅ Saved {len(data)} records before exit")
+            print(f"✅ Saved {len(data)} unique records before exit")
     except Exception as e:
         print(f"\n❌ Fatal error: {e}")
     
