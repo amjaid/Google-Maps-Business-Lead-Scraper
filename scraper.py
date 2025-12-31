@@ -307,6 +307,83 @@ async def perform_search(page):
     return False
 
 
+async def get_scrollable_panel(page):
+    """Find and return the scrollable panel containing business results"""
+    # Try multiple selectors for the scrollable panel
+    scrollable_selectors = [
+        'div[role="feed"]',  # Primary selector for Google Maps results
+        '.m6QErb[aria-label*="Results for"]',  # Another common selector
+        '.m6QErb.DxyBCb',  # Alternative class
+        'div[aria-label*="Results"]',  # Generic results container
+    ]
+    
+    for selector in scrollable_selectors:
+        try:
+            panel = page.locator(selector).first
+            if await panel.count() > 0:
+                await panel.wait_for(state="visible", timeout=5000)
+                print(f"✅ Found scrollable panel with selector: {selector}")
+                
+                # Try to get bounding box to confirm it's visible
+                bbox = await panel.bounding_box()
+                if bbox:
+                    print(f"Panel position: x={bbox['x']}, y={bbox['y']}, width={bbox['width']}, height={bbox['height']}")
+                    return panel
+        except:
+            continue
+    
+    print("⚠️ Could not find specific scrollable panel, using page scroll")
+    return None
+
+
+async def scroll_to_load_more(page, panel=None):
+    """Scroll to load more business cards"""
+    try:
+        if panel:
+            # Get panel position and move mouse to it
+            bbox = await panel.bounding_box()
+            if bbox:
+                # Move mouse to the center of the panel
+                center_x = bbox['x'] + bbox['width'] / 2
+                center_y = bbox['y'] + bbox['height'] / 2
+                await page.mouse.move(center_x, center_y)
+                await page.wait_for_timeout(1000)
+                
+                # Scroll within the panel
+                scroll_amount = random.randint(300, 800)
+                await page.mouse.wheel(0, scroll_amount)
+                print(f"Scrolled panel by {scroll_amount}px")
+            else:
+                # Fallback to page scroll
+                await page.mouse.wheel(0, random.randint(300, 800))
+        else:
+            # Scroll the entire page
+            await page.mouse.wheel(0, random.randint(300, 800))
+        
+        # Wait for new content to load
+        await page.wait_for_timeout(random.randint(2000, 4000))
+        
+        # Check if we're at the bottom (end of results)
+        if panel:
+            try:
+                scroll_height = await panel.evaluate('element => element.scrollHeight')
+                scroll_top = await panel.evaluate('element => element.scrollTop')
+                client_height = await panel.evaluate('element => element.clientHeight')
+                
+                # If we're near the bottom (within 100px)
+                if scroll_height - (scroll_top + client_height) < 100:
+                    print("⚠️  Near bottom of results")
+                    return False
+            except:
+                pass
+        
+        return True
+        
+    except Exception as e:
+        print(f"Error during scroll: {e}")
+        return False
+
+
 # ------------------------
 # Main Runner
 # ------------------------
@@ -368,16 +445,27 @@ async def run():
                 if not await perform_search(page):
                     raise Exception("Search failed")
                 
+                # Find the scrollable panel
+                scroll_panel = await get_scrollable_panel(page)
+                
                 # Initial scroll to load more results
-                for _ in range(3):
-                    await page.mouse.wheel(0, random.randint(400, 800))
-                    await page.wait_for_timeout(random.randint(2000, 4000))
+                print("Performing initial scrolls to load more results...")
+                for i in range(3):
+                    print(f"Initial scroll {i+1}/3...")
+                    await scroll_to_load_more(page, scroll_panel)
+                    await page.wait_for_timeout(random.randint(1500, 3000))
                 
                 # Main scraping loop
                 stuck_counter = 0
-                max_stuck_attempts = 5
+                max_stuck_attempts = 8
+                no_new_data_counter = 0
+                last_card_count = 0
                 
                 while len(data) < config.TARGET:
+                    # Get current card count before scraping
+                    business_cards = page.locator("div[role='article']")
+                    current_card_count = await business_cards.count()
+                    
                     # Scrape current businesses
                     new_scraped = await scrape_current_businesses(page)
                     
@@ -386,7 +474,16 @@ async def run():
                         print(f"\n✅ Reached target of {config.TARGET} unique businesses!")
                         break
                     
-                    # Check if we're stuck
+                    # Check if we're stuck (no new cards loaded)
+                    if current_card_count == last_card_count:
+                        no_new_data_counter += 1
+                        print(f"No new cards loaded (counter: {no_new_data_counter}/3)")
+                    else:
+                        no_new_data_counter = 0
+                    
+                    last_card_count = current_card_count
+                    
+                    # Check if we're stuck (no new unique businesses scraped)
                     if new_scraped == 0:
                         stuck_counter += 1
                         print(f"No new unique businesses scraped (stuck: {stuck_counter}/{max_stuck_attempts})")
@@ -395,35 +492,83 @@ async def run():
                             print("Too many attempts without new unique businesses. Stopping.")
                             break
                         
-                        # Try different scroll patterns
-                        scroll_amount = random.choice([300, 500, 800, 1200])
-                        await page.mouse.wheel(0, scroll_amount)
-                        await page.wait_for_timeout(random.randint(3000, 6000))
+                        # Try different strategies when stuck
+                        print("Trying alternative scrolling strategies...")
                         
-                        # Try clicking on map to trigger loading
+                        # Strategy 1: Scroll more aggressively
+                        if scroll_panel:
+                            try:
+                                # Scroll to a specific business card
+                                cards = page.locator("div[role='article']")
+                                if await cards.count() > 5:
+                                    last_card = cards.nth(await cards.count() - 3)
+                                    await last_card.scroll_into_view_if_needed()
+                                    print("Scrolled to last business card")
+                            except:
+                                pass
+                        
+                        # Strategy 2: Scroll in larger increments
+                        for _ in range(2):
+                            await scroll_to_load_more(page, scroll_panel)
+                            await page.wait_for_timeout(random.randint(2000, 4000))
+                        
+                        # Strategy 3: Try clicking on a business card to trigger loading
                         if random.random() > 0.5:
                             try:
-                                await page.mouse.click(600, 300)
-                                await page.wait_for_timeout(2000)
+                                cards = page.locator("div[role='article']")
+                                if await cards.count() > 3:
+                                    random_card = cards.nth(random.randint(0, await cards.count() - 1))
+                                    await random_card.click()
+                                    await page.wait_for_timeout(2000)
+                                    
+                                    # Click back on the list
+                                    if scroll_panel:
+                                        bbox = await scroll_panel.bounding_box()
+                                        if bbox:
+                                            await page.mouse.click(bbox['x'] + 50, bbox['y'] + 50)
+                                            await page.wait_for_timeout(1000)
+                                    print("Clicked on random business card to trigger loading")
                             except:
                                 pass
                     else:
                         stuck_counter = 0  # Reset counter if we got new data
                     
-                    # Regular scroll
-                    scroll_amount = random.randint(300, 1000)
-                    await page.mouse.wheel(0, scroll_amount)
+                    # Regular scroll to load more content
+                    print("Scrolling to load more businesses...")
+                    scroll_success = await scroll_to_load_more(page, scroll_panel)
                     
-                    # Random delay
+                    if not scroll_success:
+                        print("⚠️  May have reached end of results")
+                        stuck_counter += 1
+                        if stuck_counter >= 3:
+                            print("End of results reached. Stopping.")
+                            break
+                    
+                    # Random delay between actions
                     delay = random.uniform(1.5, 4)
                     await page.wait_for_timeout(int(delay * 1000))
                     
-                    # Human-like mouse movement
+                    # Human-like mouse movement (within the panel if available)
                     if random.random() > 0.7:
-                        await page.mouse.move(
-                            random.randint(100, 700),
-                            random.randint(100, 500)
-                        )
+                        if scroll_panel:
+                            try:
+                                bbox = await scroll_panel.bounding_box()
+                                if bbox:
+                                    await page.mouse.move(
+                                        random.randint(int(bbox['x']), int(bbox['x'] + bbox['width'])),
+                                        random.randint(int(bbox['y']), int(bbox['y'] + bbox['height']))
+                                    )
+                            except:
+                                # Fallback to general area
+                                await page.mouse.move(
+                                    random.randint(100, 700),
+                                    random.randint(100, 500)
+                                )
+                        else:
+                            await page.mouse.move(
+                                random.randint(100, 700),
+                                random.randint(100, 500)
+                            )
                 
                 # Save data
                 await save_data()
