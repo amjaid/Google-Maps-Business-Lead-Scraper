@@ -23,23 +23,6 @@ Designed specifically for **JavaScript-heavy pages**, infinite scrolling, and re
 ✅ Persistent browser sessions  
 ✅ Suitable for **lead generation & market research**
 
----
-
-## 📸 Screenshots
-
-> Replace these placeholders with your actual screenshots
-
-### 🔍 Search Results Loading
-![Search Results](screenshots/search-results.png)
-
-### 📊 Extracted Data Output
-![CSV Output](screenshots/output-preview.png)
-
-### 🧭 Infinite Scrolling Panel
-![Scrolling Panel](screenshots/scroll-panel.png)
-
----
-
 ## 🧱 Architecture Diagram
 
 ```text
@@ -73,7 +56,7 @@ Designed specifically for **JavaScript-heavy pages**, infinite scrolling, and re
 │ pandas DataFrame         │
 │ CSV / Excel Export       │
 └──────────────────────────┘
-
+```
 
 🚀 How It Works
 
@@ -117,21 +100,22 @@ python scraper.py
 
 Category and address are extracted using semantic rules, not fixed DOM positions:
 
-Category
+-> Category
 
-Short text
+-> Short text
 
-No digits
+-> No digits
 
-No RM / Open / Closed keywords
+-> No RM / Open / Closed keywords
 
-Address
+-> Address
 
-Long text
+-> Long text
 
-Contains digits (street numbers, building info)
+-> Contains digits (street numbers, building info)
 
 This makes the scraper resilient to Google Maps UI changes.
+
 
 ⚠️ Important Notes
 
@@ -139,15 +123,16 @@ This scraper is not headless by default (intentional)
 
 Excessive speed may trigger:
 
-CAPTCHA
+-> CAPTCHA
 
-Temporary IP throttling
+-> Temporary IP throttling
 
-Recommended limits:
 
-300–1000 records/day per IP
+⚠️ Recommended limits:
 
-Avoid running multiple instances simultaneously
+-> 300–1000 records/day per IP
+
+-> Avoid running multiple instances simultaneously
 
 🔒 Session Persistence
 
@@ -159,11 +144,12 @@ launch_persistent_context(user_data_dir=PROFILE_DIR)
 
 This means:
 
-Cookies are saved
+-> Cookies are saved
 
-Login/session state is reused
+-> Login/session state is reused
 
-Lower chance of repeated bot detection
+-> Lower chance of repeated bot detection
+
 
 ❗ Legal & Ethical Disclaimer
 
@@ -177,6 +163,7 @@ Local data protection laws
 
 Use responsibly and at your own risk.
 
+
 📈 Possible Improvements
 
 Click into business detail pages to extract phone numbers
@@ -189,12 +176,27 @@ Resume scraping from last saved record
 
 Multi-location scraping
 
+
 🧑‍💻 Author Notes
 
 This scraper is optimized for:
 
-Freelance data collection tasks
+-> Freelance data collection tasks
 
-Proof-of-concept scraping
+-> Proof-of-concept scraping
 
-Controlled data extraction jobs
+-> Controlled data extraction jobs
+
+
+
+👤 Author Abdullah Mohammad Jaid
+
+🌐 Website
+```bash
+amjaid.com
+```
+
+🐙 GitHub
+```bash
+github.com/amjaid
+```
