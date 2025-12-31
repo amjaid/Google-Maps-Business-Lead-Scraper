@@ -198,12 +198,6 @@ This scraper is optimized for:
 
 👤 Author Abdullah Mohammad Jaid
 
-🌐 Website
-```bash
-amjaid.com
-```
+[🌐 Website](https://amjaid.com)
 
-🐙 GitHub
-```bash
-github.com/amjaid
-```
+[🐙 GitHub](https://github.com/amjaid)
