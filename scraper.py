@@ -5,10 +5,32 @@ import asyncio
 from playwright.async_api import async_playwright, TimeoutError as PlaywrightTimeoutError
 import random
 from datetime import datetime
+import os
 
+# Initialize data and seen_urls
 data = []
-seen_urls = set()  # Track seen URLs to avoid duplicates
+seen_urls = set()
 
+# Check if the CSV file exists
+if os.path.exists(config.CSV_OUTPUT):
+     df_existing = pd.read_csv(config.CSV_OUTPUT)
+     # Convert to list of dictionaries
+     existing_records = df_existing.to_dict('records')
+     for record in existing_records:
+         # We use the same logic as in add_item to create the identifiers
+         url = record.get("Website URL", "N/A")
+         if url != "N/A":
+             seen_urls.add(url)
+         else:
+             # Use name and address as identifier
+             unique_id = f"{record.get('Business name', '')}|{record.get('Full address', '')}"
+             seen_urls.add(unique_id)
+         data.append(record)
+     print(f"Loaded {len(data)} existing records from {config.CSV_OUTPUT}")
+else:
+     print(f"No existing data found at {config.CSV_OUTPUT}. Starting fresh.")
+
+     
 # ------------------------
 # Helpers
 # ------------------------
@@ -115,7 +137,7 @@ async def extract_and_add_business_data(card, attempt=1):
             pass
         
         # 4. URL
-        link_element = card.locator("a.hfpxzc")
+        link_element = card.locator("a.lcr4fd")
         url = await safe_attribute(link_element, "href")
         
         # 5. Rating
