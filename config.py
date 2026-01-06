@@ -11,8 +11,8 @@ MAX_RETRIES = 3
 PROFILE_DIR = "chrome_profile_google_maps"
 
 # Output
-CSV_OUTPUT = f"Tech Comapny{SEARCH}.csv"
-EXCEL_OUTPUT = f"Tech Company{SEARCH}.xlsx"
+CSV_OUTPUT = "Tech Comapny.csv"
+EXCEL_OUTPUT = "Tech Company.xlsx"
 SCREENSHOT_ON_ERROR = "error_screenshot.png"
 
 # Targets
